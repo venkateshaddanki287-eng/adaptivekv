@@ -1,0 +1,22 @@
+\begin{table}[h]
+\centering
+\caption{KV-Cache Memory Consumption and Compression Ratios across Context Lengths}
+\begin{tabular}{lrrrrr}
+\toprule
+Method & Context & Orig (KB) & Comp (KB) & Ratio & Saved (\%) \\
+\midrule
+FP16 Baseline & 2048 & 65536.0 & 65536.0 & 1.00\times & 0.0\% \\
+Fixed 4-bit & 2048 & 65536.0 & 17408.0 & 3.76\times & 73.4\% \\
+Fixed 3-bit & 2048 & 65536.0 & 13312.0 & 4.92\times & 79.7\% \\
+Fixed 2-bit & 2048 & 65536.0 & 9216.0 & 7.11\times & 85.9\% \\
+AdaptiveKV (Threshold) & 2048 & 65536.0 & 15847.5 & 4.14\times & 75.8\% \\
+AdaptiveKV (Budget 25%) & 2048 & 65536.0 & 19456.0 & 3.37\times & 70.3\% \\
+FP16 Baseline & 512 & 16384.0 & 16384.0 & 1.00\times & 0.0\% \\
+Fixed 4-bit & 512 & 16384.0 & 4352.0 & 3.76\times & 73.4\% \\
+Fixed 3-bit & 512 & 16384.0 & 3328.0 & 4.92\times & 79.7\% \\
+Fixed 2-bit & 512 & 16384.0 & 2304.0 & 7.11\times & 85.9\% \\
+AdaptiveKV (Threshold) & 512 & 16384.0 & 3854.5 & 4.25\times & 76.5\% \\
+AdaptiveKV (Budget 25%) & 512 & 16384.0 & 4864.0 & 3.37\times & 70.3\% \\
+\bottomrule
+\end{tabular}
+\end{table}

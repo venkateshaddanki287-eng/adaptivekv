@@ -1,0 +1,16 @@
+# Table 2: Quantization Quality Comparison
+
+| Method | Context Length | MSE | Max Abs Error | Cosine Similarity |
+| --- | --- | --- | --- | --- |
+| FP16 Baseline | 2048 | 0.000000 | 0.0000 | 1.0000 |
+| Fixed 4-bit | 2048 | 0.010088 | 0.2847 | 0.9951 |
+| Fixed 3-bit | 2048 | 0.046332 | 0.6147 | 0.9777 |
+| Fixed 2-bit | 2048 | 0.252401 | 1.4124 | 0.8924 |
+| AdaptiveKV (Threshold) | 2048 | 0.055789 | 1.3003 | 0.9733 |
+| AdaptiveKV (Budget 25%) | 2048 | 0.010088 | 0.2847 | 0.9951 |
+| FP16 Baseline | 512 | 0.000000 | 0.0000 | 1.0000 |
+| Fixed 4-bit | 512 | 0.010095 | 0.2616 | 0.9950 |
+| Fixed 3-bit | 512 | 0.046346 | 0.5601 | 0.9776 |
+| Fixed 2-bit | 512 | 0.252456 | 1.3081 | 0.8924 |
+| AdaptiveKV (Threshold) | 512 | 0.073432 | 1.2412 | 0.9652 |
+| AdaptiveKV (Budget 25%) | 512 | 0.010095 | 0.2616 | 0.9950 |

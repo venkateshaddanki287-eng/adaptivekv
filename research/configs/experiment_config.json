@@ -1,0 +1,25 @@
+{
+  "environment": {
+    "adaptivekv_version": "0.1.0",
+    "pytorch_version": "2.13.0+cpu",
+    "transformers_version": "5.15.0",
+    "device": "CPU",
+    "cuda_available": false,
+    "random_seed": 42
+  },
+  "model": {
+    "model_id": "LlamaForCausalLM-ResearchConfig",
+    "param_count": 19007744,
+    "num_layers": 4,
+    "num_heads": 8,
+    "head_dim": 32
+  },
+  "context_lengths": [
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "gen_tokens": 32,
+  "seed": 42
+}

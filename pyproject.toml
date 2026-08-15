@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adaptivekv"
+version = "0.1.0"
+description = "Adaptive KV-cache compression for LLM inference via dynamic bit allocation."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+authors = [
+    {name = "AdaptiveKV Contributors"},
+]
+keywords = [
+    "llm",
+    "kv-cache",
+    "quantization",
+    "inference",
+    "memory-optimization",
+    "transformers",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "torch>=2.1.0",
+    "transformers>=4.36.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-benchmark>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+]
+bench = [
+    "datasets>=2.15.0",
+    "accelerate>=0.25.0",
+    "psutil>=5.9.0",
+]
+
+[project.scripts]
+adaptivekv = "adaptivekv.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/adaptivekv/adaptivekv"
+Repository = "https://github.com/adaptivekv/adaptivekv"
+Issues = "https://github.com/adaptivekv/adaptivekv/issues"
+Documentation = "https://github.com/adaptivekv/adaptivekv/tree/main/docs"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+markers = [
+    "cuda: marks tests requiring CUDA (deselect with '-m \"not cuda\"')",
+    "slow: marks tests that are slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests requiring model downloads",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+ignore = ["E501", "TC"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["torch.*", "transformers.*", "numpy.*"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["adaptivekv"]
+omit = ["tests/*", "benchmarks/*", "examples/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 80

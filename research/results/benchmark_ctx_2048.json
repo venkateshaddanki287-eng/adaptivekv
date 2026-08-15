@@ -1,0 +1,126 @@
+[
+  {
+    "model": "synthetic-transformer",
+    "method": "FP16 Baseline",
+    "context_length": 2048,
+    "num_layers": 4,
+    "num_heads": 16,
+    "head_dim": 128,
+    "original_bytes": 67108864,
+    "compressed_bytes": 67108864,
+    "compression_ratio": 1.0,
+    "memory_saved_percent": 0.0,
+    "latency_ms": 0.0016,
+    "tokens_per_second": 1279990253.52,
+    "mse": 0.0,
+    "max_abs_error": 0.0,
+    "cosine_similarity": 1.0,
+    "bit_distribution": {
+      "16": 33554432
+    }
+  },
+  {
+    "model": "synthetic-transformer",
+    "method": "Fixed 4-bit",
+    "context_length": 2048,
+    "num_layers": 4,
+    "num_heads": 16,
+    "head_dim": 128,
+    "original_bytes": 67108864,
+    "compressed_bytes": 17825792,
+    "compression_ratio": 3.7647,
+    "memory_saved_percent": 73.4375,
+    "latency_ms": 231.6026,
+    "tokens_per_second": 8842.73,
+    "mse": 0.01008752,
+    "max_abs_error": 0.284729,
+    "cosine_similarity": 0.995057,
+    "bit_distribution": {
+      "4": 33554432
+    }
+  },
+  {
+    "model": "synthetic-transformer",
+    "method": "Fixed 3-bit",
+    "context_length": 2048,
+    "num_layers": 4,
+    "num_heads": 16,
+    "head_dim": 128,
+    "original_bytes": 67108864,
+    "compressed_bytes": 13631488,
+    "compression_ratio": 4.9231,
+    "memory_saved_percent": 79.6875,
+    "latency_ms": 316.3904,
+    "tokens_per_second": 6473.02,
+    "mse": 0.04633195,
+    "max_abs_error": 0.614746,
+    "cosine_similarity": 0.977679,
+    "bit_distribution": {
+      "3": 33554432
+    }
+  },
+  {
+    "model": "synthetic-transformer",
+    "method": "Fixed 2-bit",
+    "context_length": 2048,
+    "num_layers": 4,
+    "num_heads": 16,
+    "head_dim": 128,
+    "original_bytes": 67108864,
+    "compressed_bytes": 9437184,
+    "compression_ratio": 7.1111,
+    "memory_saved_percent": 85.9375,
+    "latency_ms": 232.7782,
+    "tokens_per_second": 8798.07,
+    "mse": 0.25240053,
+    "max_abs_error": 1.412354,
+    "cosine_similarity": 0.892371,
+    "bit_distribution": {
+      "2": 33554432
+    }
+  },
+  {
+    "model": "synthetic-transformer",
+    "method": "AdaptiveKV (Threshold)",
+    "context_length": 2048,
+    "num_layers": 4,
+    "num_heads": 16,
+    "head_dim": 128,
+    "original_bytes": 67108864,
+    "compressed_bytes": 16227840,
+    "compression_ratio": 4.1354,
+    "memory_saved_percent": 75.8186,
+    "latency_ms": 439.632,
+    "tokens_per_second": 4658.44,
+    "mse": 0.05578913,
+    "max_abs_error": 1.300293,
+    "cosine_similarity": 0.973274,
+    "bit_distribution": {
+      "2": 21152,
+      "3": 188640,
+      "4": 52352
+    }
+  },
+  {
+    "model": "synthetic-transformer",
+    "method": "AdaptiveKV (Budget 25%)",
+    "context_length": 2048,
+    "num_layers": 4,
+    "num_heads": 16,
+    "head_dim": 128,
+    "original_bytes": 67108864,
+    "compressed_bytes": 19922944,
+    "compression_ratio": 3.3684,
+    "memory_saved_percent": 70.3125,
+    "latency_ms": 3103.1924,
+    "tokens_per_second": 659.97,
+    "mse": 0.01008752,
+    "max_abs_error": 0.284729,
+    "cosine_similarity": 0.995057,
+    "bit_distribution": {
+      "2": 0,
+      "3": 0,
+      "4": 262144
+    }
+  }
+]

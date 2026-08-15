@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AdaptiveKV — KV-Cache Research Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --border-card: rgba(255, 255, 255, 0.1);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-primary: #6366f1;
+      --accent-success: #10b981;
+      --accent-warning: #f59e0b;
+      --accent-danger: #ef4444;
+      --accent-purple: #a855f7;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background: #090d16;
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border-card);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.25rem;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+    }
+
+    .brand-title h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-title p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .badge {
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+      background: var(--bg-card);
+      padding: 1.25rem;
+      border-radius: 16px;
+      border: 1px solid var(--border-card);
+      backdrop-filter: blur(12px);
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex: 1;
+    }
+
+    .control-group label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    select, button {
+      background: #1e293b;
+      color: var(--text-main);
+      border: 1px solid var(--border-card);
+      padding: 0.625rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    select:focus {
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 16px;
+      padding: 1.25rem;
+      backdrop-filter: blur(12px);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .metric-label {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .metric-sub {
+      font-size: 0.75rem;
+      color: var(--accent-success);
+      margin-top: 0.5rem;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 16px;
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .chart-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 300px !important;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-card);
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-logo">AKV</div>
+      <div class="brand-title">
+        <h1>AdaptiveKV Research Dashboard</h1>
+        <p>Empirical Performance & Dynamic Bit-Allocation Analytics</p>
+      </div>
+    </div>
+    <div class="badge">Live Benchmark Data</div>
+  </header>
+
+  <div class="controls">
+    <div class="control-group">
+      <label for="ctxSelect">Context Length</label>
+      <select id="ctxSelect" onchange="renderDashboard()">
+        <option value="all">All Context Lengths</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label for="methodSelect">Method Filter</label>
+      <select id="methodSelect" onchange="renderDashboard()">
+        <option value="all">All Methods</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Max Compression Ratio</div>
+      <div class="metric-value" id="valRatio" style="color: var(--accent-success);">-</div>
+      <div class="metric-sub" id="subRatio">Memory Saved: -</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Min Reconstruction MSE</div>
+      <div class="metric-value" id="valMSE" style="color: var(--accent-primary);">-</div>
+      <div class="metric-sub" id="subMSE">Cosine Sim: -</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Original KV Memory</div>
+      <div class="metric-value" id="valOrigMem">-</div>
+      <div class="metric-sub">FP16 Baseline</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Adaptive Compressed Memory</div>
+      <div class="metric-value" id="valCompMem" style="color: var(--accent-purple);">-</div>
+      <div class="metric-sub" id="subCompMem">Bit Allocation Active</div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Memory Consumption Comparison (KB)</div>
+      <canvas id="chartMemory"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Reconstruction Quality (Cosine Similarity)</div>
+      <canvas id="chartQuality"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-title">Detailed Benchmark Results</div>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Context</th>
+          <th>Original (KB)</th>
+          <th>Compressed (KB)</th>
+          <th>Ratio</th>
+          <th>Saved (%)</th>
+          <th>MSE</th>
+          <th>Cos Sim</th>
+          <th>Latency (ms)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    let rawData = [];
+    let chartMemoryObj = null;
+    let chartQualityObj = null;
+
+    async function loadData() {
+      try {
+        const resp = await fetch('/api/data');
+        const json = await resp.json();
+        rawData = json.results || [];
+        populateSelects();
+        renderDashboard();
+      } catch (err) {
+        console.error("Error loading benchmark data:", err);
+      }
+    }
+
+    function populateSelects() {
+      const ctxSelect = document.getElementById('ctxSelect');
+      const methodSelect = document.getElementById('methodSelect');
+
+      const ctxs = [...new Set(rawData.map(r => r.context_length))].sort((a,b) => a-b);
+      const methods = [...new Set(rawData.map(r => r.method))];
+
+      ctxSelect.innerHTML = '<option value="all">All Context Lengths</option>' + 
+        ctxs.map(c => `<option value="${c}">${c} tokens</option>`).join('');
+
+      methodSelect.innerHTML = '<option value="all">All Methods</option>' + 
+        methods.map(m => `<option value="${m}">${m}</option>`).join('');
+    }
+
+    function getFilteredData() {
+      const ctxVal = document.getElementById('ctxSelect').value;
+      const methodVal = document.getElementById('methodSelect').value;
+
+      return rawData.filter(r => {
+        const matchCtx = ctxVal === 'all' || r.context_length.toString() === ctxVal;
+        const matchMethod = methodVal === 'all' || r.method === methodVal;
+        return matchCtx && matchMethod;
+      });
+    }
+
+    function renderDashboard() {
+      const filtered = getFilteredData();
+      if (!filtered.length) return;
+
+      // Update Summary Cards
+      const maxRatio = Math.max(...filtered.map(r => r.compression_ratio));
+      const bestRecord = filtered.find(r => r.compression_ratio === maxRatio) || filtered[0];
+      
+      document.getElementById('valRatio').innerText = `${maxRatio.toFixed(2)}x`;
+      document.getElementById('subRatio').innerText = `Saved: ${bestRecord.memory_saved_percent.toFixed(1)}%`;
+
+      const adaptiveRec = filtered.find(r => r.method.includes('AdaptiveKV')) || filtered[0];
+      document.getElementById('valMSE').innerText = adaptiveRec.mse.toFixed(6);
+      document.getElementById('subMSE').innerText = `Cosine Sim: ${adaptiveRec.cosine_similarity.toFixed(4)}`;
+
+      document.getElementById('valOrigMem').innerText = `${(adaptiveRec.original_bytes / 1024).toFixed(1)} KB`;
+      document.getElementById('valCompMem').innerText = `${(adaptiveRec.compressed_bytes / 1024).toFixed(1)} KB`;
+
+      // Render Table
+      const tbody = document.querySelector('#resultsTable tbody');
+      tbody.innerHTML = filtered.map(r => `
+        <tr>
+          <td style="font-weight: 600;">${r.method}</td>
+          <td>${r.context_length}</td>
+          <td>${(r.original_bytes / 1024).toFixed(1)}</td>
+          <td>${(r.compressed_bytes / 1024).toFixed(1)}</td>
+          <td><span style="color: var(--accent-success); font-weight: 600;">${r.compression_ratio.toFixed(2)}x</span></td>
+          <td>${r.memory_saved_percent.toFixed(1)}%</td>
+          <td style="font-family: monospace;">${r.mse.toFixed(6)}</td>
+          <td style="font-family: monospace;">${r.cosine_similarity.toFixed(4)}</td>
+          <td>${r.latency_ms.toFixed(2)}</td>
+        </tr>
+      `).join('');
+
+      renderCharts(filtered);
+    }
+
+    function renderCharts(data) {
+      const labels = data.map(r => `${r.method} (${r.context_length})`);
+      const memoryVals = data.map(r => (r.compressed_bytes / 1024).toFixed(1));
+      const qualityVals = data.map(r => r.cosine_similarity);
+
+      if (chartMemoryObj) chartMemoryObj.destroy();
+      if (chartQualityObj) chartQualityObj.destroy();
+
+      const ctxMem = document.getElementById('chartMemory').getContext('2d');
+      chartMemoryObj = new Chart(ctxMem, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Memory (KB)',
+            data: memoryVals,
+            backgroundColor: 'rgba(99, 102, 241, 0.6)',
+            borderColor: '#6366f1',
+            borderWidth: 1,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+
+      const ctxQual = document.getElementById('chartQuality').getContext('2d');
+      chartQualityObj = new Chart(ctxQual, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Cosine Similarity',
+            data: qualityVals,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { min: 0.8, max: 1.0, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
