@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use AdaptiveKV in your research or software, please cite it as below."
+authors:
+  - family-names: "Addanki"
+    given-names: "Venkatesh"
+    title: "AdaptiveKV Research Team"
+title: "AdaptiveKV: Dynamic Bit-Allocation for KV-Cache Compression"
+version: 0.1.0
+date-released: 2026-08-15
+url: "https://github.com/venkateshaddanki287-eng/adaptivekv"
+license: Apache-2.0
+abstract: >-
+  AdaptiveKV is an independent Python library for dynamic, importance-aware Key-Value (KV) cache compression during Large Language Model (LLM) inference.

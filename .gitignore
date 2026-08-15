@@ -26,17 +26,33 @@ share/python-wheels/
 .coverage
 htmlcov/
 
-# Virtual Environment
+# Virtual Environment & Secrets
 venv/
 .venv/
 env/
 .env/
+.env.*
+secrets/
+*.pem
+*.key
 
-# IDE
+# Model Weights & Large Binary Files
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Temporary Benchmark & Junk Files
+tmp/
+temp/
+*.tmp
+*.log
+
+# IDE & OS Junk
 .vscode/
 .idea/
 *.swp
-
-# OS
 Thumbs.db
 Desktop.ini
