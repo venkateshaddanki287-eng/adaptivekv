@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptivekv"
-version = "0.1.0"
-description = "Adaptive KV-cache compression for LLM inference via dynamic bit allocation."
+version = "1.0.0"
+description = "Adaptive KV-cache compression for LLM inference via dynamic token eviction and bit allocation."
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "AdaptiveKV Contributors"},
+    {name = "AdaptiveKV Team"},
 ]
 keywords = [
     "llm",
@@ -21,13 +21,14 @@ keywords = [
     "transformers",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Typing :: Typed",
 ]
@@ -46,6 +47,8 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.7.0",
     "pre-commit>=3.5.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
 ]
 bench = [
     "datasets>=2.15.0",
@@ -57,10 +60,11 @@ bench = [
 adaptivekv = "adaptivekv.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/adaptivekv/adaptivekv"
-Repository = "https://github.com/adaptivekv/adaptivekv"
-Issues = "https://github.com/adaptivekv/adaptivekv/issues"
-Documentation = "https://github.com/adaptivekv/adaptivekv/tree/main/docs"
+Homepage = "https://github.com/venkateshaddanki287-eng/adaptivekv"
+Repository = "https://github.com/venkateshaddanki287-eng/adaptivekv"
+Issues = "https://github.com/venkateshaddanki287-eng/adaptivekv/issues"
+Documentation = "https://github.com/venkateshaddanki287-eng/adaptivekv/tree/main/docs"
+
 
 [tool.setuptools.packages.find]
 where = ["src"]
