@@ -1,0 +1,99 @@
+{
+  "model_id": "facebook/opt-125m",
+  "max_new_tokens": 50,
+  "prompt_tokens": 14,
+  "baseline": {
+    "total_latency_s": 0.8904,
+    "ms_per_token": 17.81
+  },
+  "adaptivekv": {
+    "total_latency_s": 2.9924,
+    "ms_per_token": 59.85,
+    "slowdown_factor": 3.36
+  },
+  "breakdown": {
+    "LLM/model inference": {
+      "time_s": 0.9973,
+      "percentage": 33.33
+    },
+    "dequantization": {
+      "time_s": 0.0,
+      "percentage": 0.0
+    },
+    "bit unpacking (inside dequant)": {
+      "time_s": 0.0,
+      "percentage": 0.0
+    },
+    "dequant math & scaling": {
+      "time_s": 0.0,
+      "percentage": 0.0
+    },
+    "quantization": {
+      "time_s": 1.4402,
+      "percentage": 48.13
+    },
+    "bit packing (inside quant)": {
+      "time_s": 0.4306,
+      "percentage": 14.39
+    },
+    "quant math & min/max/scale": {
+      "time_s": 1.0096,
+      "percentage": 33.74
+    },
+    "importance scoring": {
+      "time_s": 0.3399,
+      "percentage": 11.36
+    },
+    "token selection & eviction": {
+      "time_s": 0.0902,
+      "percentage": 3.02
+    },
+    "bit allocation": {
+      "time_s": 0.0669,
+      "percentage": 2.23
+    },
+    "token budget calculation": {
+      "time_s": 0.0091,
+      "percentage": 0.3
+    },
+    "tensor copying/cloning & python cache overhead": {
+      "time_s": 0.0489,
+      "percentage": 1.63
+    },
+    "CPU <-> GPU transfers": {
+      "time_s": 0.0,
+      "percentage": 0.0
+    }
+  },
+  "top_3_bottlenecks": [
+    {
+      "component": "Dequantization & Bit Unpacking",
+      "time_s": 0.0,
+      "percentage": 0.0,
+      "why_slow": "Executed 1,200 times during decoding (every token decoding step x 12 layers x 2 K/V tensors). Unpacks bit-packed uint8 tensors back to float32 using non-vectorized Python bit-shift operations (>> and &) and PyTorch tensor reshape operations."
+    },
+    {
+      "component": "Quantization & Bit Packing",
+      "time_s": 1.4402,
+      "percentage": 48.13,
+      "why_slow": "Executed 1,200 times during decoding. Computes per-group min/max/scale/zero-point parameters and packs 2/3/4-bit values into uint8 byte arrays using Python loops, stack/cat calls, and bitwise bit-shifting."
+    },
+    {
+      "component": "Repeated Dequantize-Quantize-Dequantize Loop per Decoding Step",
+      "time_s": 1.4402,
+      "percentage": 48.13,
+      "why_slow": "On every single token generation step, the entire historical KV cache is dequantized from compressed storage into float32, concatenated with 1 new token, re-quantized back into compressed storage, and immediately dequantized a second time to return floats for attention computation."
+    }
+  ],
+  "counters": {
+    "cache_update_calls": 600,
+    "quantize_calls": 1200,
+    "dequantize_calls": 0,
+    "pack_bits_calls": 2962,
+    "unpack_bits_calls": 0,
+    "importance_scoring_calls": 1716,
+    "token_selection_calls": 516,
+    "bit_allocation_calls": 600,
+    "budget_calc_calls": 600
+  }
+}

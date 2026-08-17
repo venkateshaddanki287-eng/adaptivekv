@@ -127,7 +127,8 @@ class LayerKVCache:
             min_cache_tokens=tb_cfg.min_cache_tokens,
         )
 
-        if tb_cfg.enable_token_eviction and total_seq_len > budget:
+        is_evicting = tb_cfg.enable_token_eviction and total_seq_len > budget
+        if is_evicting:
             token_scores = self.importance_analyzer.compute_token_importance(
                 combined_keys, combined_values, attention_weights=attention_weights
             )
@@ -154,33 +155,51 @@ class LayerKVCache:
 
         # Quantize retained tokens if enabled
         if self.config.enable_quantization:
-            if self.config.enable_adaptive_bits:
-                importance = self.importance_analyzer.compute_importance(
-                    retained_k,
-                    retained_v,
-                    attention_weights=attention_weights,
-                    group_size=self.config.quantizer.group_size,
+            if is_evicting or self.compressed_keys is None or self.compressed_values is None:
+                # Full quantization path on initial prefill/fill or when eviction re-indexes tokens
+                if self.config.enable_adaptive_bits:
+                    importance = self.importance_analyzer.compute_importance(
+                        retained_k,
+                        retained_v,
+                        attention_weights=attention_weights,
+                        group_size=self.config.quantizer.group_size,
+                    )
+                    self.last_allocation = self.allocator.allocate(importance)
+                    allocations = self.last_allocation.allocations
+                else:
+                    allocations = None
+                    self.last_allocation = None
+
+                self.compressed_keys = self.quantizer.quantize(
+                    retained_k, allocations=allocations
                 )
-                self.last_allocation = self.allocator.allocate(importance)
-                allocations = self.last_allocation.allocations
+                self.compressed_values = self.quantizer.quantize(
+                    retained_v, allocations=allocations
+                )
             else:
-                allocations = None
-                self.last_allocation = None
+                # Incremental quantization path: quantize ONLY new incoming token(s)
+                if self.config.enable_adaptive_bits:
+                    importance_new = self.importance_analyzer.compute_importance(
+                        key_states,
+                        value_states,
+                        attention_weights=attention_weights,
+                        group_size=self.config.quantizer.group_size,
+                    )
+                    self.last_allocation = self.allocator.allocate(importance_new)
+                    allocations_new = self.last_allocation.allocations
+                else:
+                    allocations_new = None
+                    self.last_allocation = None
 
-            self.compressed_keys = self.quantizer.quantize(
-                retained_k, allocations=allocations
-            )
-            self.compressed_values = self.quantizer.quantize(
-                retained_v, allocations=allocations
-            )
+                new_ck = self.quantizer.quantize(key_states, allocations=allocations_new)
+                new_cv = self.quantizer.quantize(value_states, allocations=allocations_new)
 
-            # Keep resident reference unpopulated when quantized to save GPU memory
-            self.retained_keys = None
-            self.retained_values = None
+                self.compressed_keys = CompressedTensor.concat([self.compressed_keys, new_ck])
+                self.compressed_values = CompressedTensor.concat([self.compressed_values, new_cv])
 
-            deq_k = self.quantizer.dequantize(self.compressed_keys)
-            deq_v = self.quantizer.dequantize(self.compressed_values)
-            return deq_k, deq_v
+            self.retained_keys = retained_k
+            self.retained_values = retained_v
+            return retained_k, retained_v
 
         # Unquantized path
         self.retained_keys = retained_k

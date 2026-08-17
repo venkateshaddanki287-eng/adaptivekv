@@ -156,7 +156,7 @@ def run_experiment(
     # -------------------------------------------------------------------------
     # Define AdaptiveKV Test Configurations
     # -------------------------------------------------------------------------
-    test_configs = [
+    test_configs: list[dict[str, Any]] = [
         {
             "name": "AdaptiveKV (Quantization Only)",
             "kwargs": {
@@ -215,8 +215,8 @@ def run_experiment(
     # 2. AdaptiveKV Configurations Runs
     # -------------------------------------------------------------------------
     for idx, cfg_info in enumerate(test_configs, start=2):
-        mode_name = cfg_info["name"]
-        kwargs = cfg_info["kwargs"]
+        mode_name: str = str(cfg_info["name"])
+        kwargs: dict[str, Any] = dict(cfg_info["kwargs"])
         print(f">>> Running Mode {idx}: {mode_name}...")
 
         # Re-instantiate clean model adapter and fresh cache

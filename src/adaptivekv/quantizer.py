@@ -82,6 +82,55 @@ class CompressedTensor:
             return 0.0
         return (self.compressed_size_bytes * 8.0) / self.original_numel
 
+    @classmethod
+    def concat(cls, tensors: list[CompressedTensor]) -> CompressedTensor:
+        """Concatenate multiple CompressedTensor instances along the sequence dimension (-2)."""
+        if not tensors:
+            raise EmptyTensorError("Cannot concatenate empty list of CompressedTensor instances.")
+        if len(tensors) == 1:
+            return tensors[0]
+
+        first = tensors[0]
+        packed_list = [t.packed_data for t in tensors]
+        scales_list = [t.scales for t in tensors]
+        zp_list = [t.zero_points for t in tensors]
+
+        has_allocations = any(t.allocations is not None for t in tensors)
+        if has_allocations:
+            alloc_list = []
+            for t in tensors:
+                if t.allocations is not None:
+                    alloc_list.append(t.allocations)
+                else:
+                    num_g = t.scales.shape[0]
+                    alloc_list.append(torch.full((num_g,), t.bit_width, dtype=torch.int64, device=t.packed_data.device))
+            concat_alloc = torch.cat(alloc_list, dim=0)
+            avg_bw = int(round(concat_alloc.float().mean().item()))
+        else:
+            concat_alloc = None
+            avg_bw = first.bit_width
+
+        concat_packed = torch.cat(packed_list, dim=0)
+        concat_scales = torch.cat(scales_list, dim=0)
+        concat_zp = torch.cat(zp_list, dim=0)
+
+        total_seq_len = sum(t.shape[-2] for t in tensors)
+        new_shape = torch.Size([*first.shape[:-2], total_seq_len, first.shape[-1]])
+        total_padding = sum(t.padding for t in tensors)
+
+        return CompressedTensor(
+            packed_data=concat_packed,
+            scales=concat_scales,
+            zero_points=concat_zp,
+            shape=new_shape,
+            bit_width=avg_bw,
+            group_size=first.group_size,
+            symmetric=first.symmetric,
+            dtype=first.dtype,
+            padding=total_padding,
+            allocations=concat_alloc,
+        )
+
 
 @dataclass
 class QuantizationMetrics:
@@ -137,30 +186,21 @@ def pack_bits(quantized: torch.Tensor, bit_width: int) -> torch.Tensor:
     quantized = quantized.to(torch.uint8)
 
     if bit_width == 4:
-        # 2 values per byte
         if numel % 2 != 0:
             pad = torch.zeros(1, dtype=torch.uint8, device=quantized.device)
             quantized = torch.cat([quantized, pad])
         q = quantized.view(-1, 2)
-        packed = (q[:, 0] & 0x0F) | ((q[:, 1] & 0x0F) << 4)
-        return packed
+        return q[:, 0] | (q[:, 1] << 4)
 
     elif bit_width == 2:
-        # 4 values per byte
         remainder = numel % 4
         if remainder != 0:
             pad = torch.zeros(4 - remainder, dtype=torch.uint8, device=quantized.device)
             quantized = torch.cat([quantized, pad])
         q = quantized.view(-1, 4)
-        packed = (
-            (q[:, 0] & 0x03)
-            | ((q[:, 1] & 0x03) << 2)
-            | ((q[:, 2] & 0x03) << 4)
-            | ((q[:, 3] & 0x03) << 6)
-        )
-        return packed
+        return q[:, 0] | (q[:, 1] << 2) | (q[:, 2] << 4) | (q[:, 3] << 6)
 
-    else:  # 3-bit packing: 8 values into 3 bytes
+    else:  # 3-bit
         remainder = numel % 8
         if remainder != 0:
             pad = torch.zeros(8 - remainder, dtype=torch.uint8, device=quantized.device)
@@ -169,12 +209,11 @@ def pack_bits(quantized: torch.Tensor, bit_width: int) -> torch.Tensor:
         v0, v1, v2, v3 = q[:, 0], q[:, 1], q[:, 2], q[:, 3]
         v4, v5, v6, v7 = q[:, 4], q[:, 5], q[:, 6], q[:, 7]
 
-        b0 = (v0 & 7) | ((v1 & 7) << 3) | ((v2 & 3) << 6)
-        b1 = ((v2 >> 2) & 1) | ((v3 & 7) << 1) | ((v4 & 7) << 4) | ((v5 & 1) << 7)
-        b2 = ((v5 >> 1) & 3) | ((v6 & 7) << 2) | ((v7 & 7) << 5)
+        b0 = v0 | (v1 << 3) | ((v2 & 3) << 6)
+        b1 = (v2 >> 2) | (v3 << 1) | (v4 << 4) | ((v5 & 1) << 7)
+        b2 = (v5 >> 1) | (v6 << 2) | (v7 << 5)
 
-        packed = torch.stack([b0, b1, b2], dim=1).reshape(-1)
-        return packed
+        return torch.stack([b0, b1, b2], dim=1).reshape(-1)
 
 
 def unpack_bits(
@@ -199,7 +238,7 @@ def unpack_bits(
     if bit_width == 4:
         p = packed.view(-1, 1)
         v0 = p & 0x0F
-        v1 = (p >> 4) & 0x0F
+        v1 = p >> 4
         unpacked = torch.cat([v0, v1], dim=1).reshape(-1)
 
     elif bit_width == 2:
@@ -207,7 +246,7 @@ def unpack_bits(
         v0 = p & 0x03
         v1 = (p >> 2) & 0x03
         v2 = (p >> 4) & 0x03
-        v3 = (p >> 6) & 0x03
+        v3 = p >> 6
         unpacked = torch.cat([v0, v1, v2, v3], dim=1).reshape(-1)
 
     else:  # 3-bit
@@ -216,16 +255,17 @@ def unpack_bits(
 
         v0 = b0 & 7
         v1 = (b0 >> 3) & 7
-        v2 = ((b0 >> 6) & 3) | ((b1 & 1) << 2)
+        v2 = (b0 >> 6) | ((b1 & 1) << 2)
         v3 = (b1 >> 1) & 7
         v4 = (b1 >> 4) & 7
-        v5 = ((b1 >> 7) & 1) | ((b2 & 3) << 1)
+        v5 = (b1 >> 7) | ((b2 & 3) << 1)
         v6 = (b2 >> 2) & 7
-        v7 = (b2 >> 5) & 7
+        v7 = b2 >> 5
 
         unpacked = torch.stack([v0, v1, v2, v3, v4, v5, v6, v7], dim=1).reshape(-1)
 
     return unpacked[:target_numel].to(torch.uint8)
+
 
 
 # ── Base Abstract Quantizer ─────────────────────────────────────────────────
