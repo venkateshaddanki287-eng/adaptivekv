@@ -2,8 +2,17 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Ensure local src directory takes precedence over installed site-packages
+SRC_DIR = str(Path(__file__).parent.parent / "src")
+if SRC_DIR not in sys.path:
+    sys.path.insert(0, SRC_DIR)
+
 import pytest
 import torch
+
 
 # ── Device helpers ──────────────────────────────────────────────────────────
 

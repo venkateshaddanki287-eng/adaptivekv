@@ -1,6 +1,6 @@
 """Adaptive KV-cache implementation compatible with Hugging Face Transformers.
 
-Implements adaptive quantization and bit-allocation for LLM key-value caches.
+Implements token-level KV eviction, position tracking, and dynamic mixed-bit quantization.
 """
 
 from __future__ import annotations
@@ -22,14 +22,20 @@ from adaptivekv.config import (
     AdaptiveKVConfig,
     AllocationConfig,
     QuantizerConfig,
+    TokenBudgetConfig,
 )
+from adaptivekv.controller import TokenBudgetController
 from adaptivekv.importance import create_importance_analyzer
 from adaptivekv.quantizer import CompressedTensor, GroupQuantizer
+from adaptivekv.selector import TokenSelectionResult, TokenSelector
 
 # ── Layer Cache Storage ─────────────────────────────────────────────────────
 
 class LayerKVCache:
-    """Storage container for key and value states of a single model layer."""
+    """Storage container for key and value states of a single model layer.
+
+    Supports token-level eviction, logical position tracking, and mixed-bit quantization.
+    """
 
     def __init__(self, layer_idx: int, config: AdaptiveKVConfig) -> None:
         self.layer_idx = layer_idx
@@ -38,13 +44,20 @@ class LayerKVCache:
         self.quantizer = GroupQuantizer(config.quantizer)
         self.importance_analyzer = create_importance_analyzer(config.importance)
         self.allocator = AdaptiveBitAllocator(config.allocation)
+        self.token_selector = TokenSelector(config.token_budget)
+        self.budget_controller = TokenBudgetController(config.token_budget)
 
         self.compressed_keys: CompressedTensor | None = None
         self.compressed_values: CompressedTensor | None = None
         self.last_allocation: AllocationResult | None = None
+        self.last_selection: TokenSelectionResult | None = None
 
-        self._raw_keys: torch.Tensor | None = None
-        self._raw_values: torch.Tensor | None = None
+        self.retained_keys: torch.Tensor | None = None
+        self.retained_values: torch.Tensor | None = None
+        self.positions: torch.Tensor | None = None
+
+        self.tokens_seen: int = 0
+        self.tokens_evicted: int = 0
         self.is_compileable: bool = False
 
     def update(
@@ -61,61 +74,171 @@ class LayerKVCache:
             attention_weights: Optional attention weights for importance scoring.
 
         Returns:
-            Tuple of (all_dequantized_keys, all_dequantized_values).
+            Tuple of (dequantized_keys, dequantized_values) for current active cache.
         """
-        # Append to raw accumulators
-        if self._raw_keys is None or self._raw_values is None:
-            self._raw_keys = key_states
-            self._raw_values = value_states
+        device = key_states.device
+        step_len = key_states.shape[-2]
+
+        # Construct position sequence for incoming tokens
+        if self.positions is None or self.positions.numel() == 0:
+            start_pos = 0
         else:
-            self._raw_keys = torch.cat([self._raw_keys, key_states], dim=-2)
-            self._raw_values = torch.cat([self._raw_values, value_states], dim=-2)
+            start_pos = int(self.positions[-1].item()) + 1
 
-        # Compute importance and bit allocations
-        importance = self.importance_analyzer.compute_importance(
-            self._raw_keys,
-            self._raw_values,
-            attention_weights=attention_weights,
-            group_size=self.config.quantizer.group_size,
-        )
-        self.last_allocation = self.allocator.allocate(importance)
-
-        # Quantize keys and values using per-group allocated bit widths
-        allocations = self.last_allocation.allocations
-
-        self.compressed_keys = self.quantizer.quantize(
-            self._raw_keys, allocations=allocations
-        )
-        self.compressed_values = self.quantizer.quantize(
-            self._raw_values, allocations=allocations
+        new_positions = torch.arange(
+            start_pos, start_pos + step_len, dtype=torch.int64, device=device
         )
 
-        # Return full dequantized history for model attention calculation
-        deq_keys = self.quantizer.dequantize(self.compressed_keys)
-        deq_values = self.quantizer.dequantize(self.compressed_values)
+        # Retrieve existing active keys & values
+        if self.retained_keys is not None and self.retained_values is not None:
+            existing_keys = self.retained_keys
+            existing_values = self.retained_values
+            existing_positions = self.positions
+        elif self.compressed_keys is not None and self.compressed_values is not None:
+            existing_keys = self.quantizer.dequantize(self.compressed_keys)
+            existing_values = self.quantizer.dequantize(self.compressed_values)
+            existing_positions = self.positions
+        else:
+            existing_keys = None
+            existing_values = None
+            existing_positions = None
 
-        return deq_keys, deq_values
+        # Concatenate incoming states with existing history
+        if existing_keys is None or existing_values is None or existing_positions is None:
+            combined_keys = key_states
+            combined_values = value_states
+            combined_positions = new_positions
+        else:
+            combined_keys = torch.cat([existing_keys, key_states], dim=-2)
+            combined_values = torch.cat([existing_values, value_states], dim=-2)
+            combined_positions = torch.cat([existing_positions, new_positions], dim=0)
+
+        self.tokens_seen += step_len
+        total_seq_len = combined_keys.shape[-2]
+
+        # Calculate budget and apply token eviction if enabled
+        tb_cfg = self.config.token_budget
+        budget = self.budget_controller.get_budget(
+            total_seq_len,
+            max_cache_tokens=tb_cfg.max_cache_tokens,
+            keep_ratio=tb_cfg.keep_ratio,
+            recent_window=tb_cfg.recent_window,
+            sink_tokens=tb_cfg.sink_tokens,
+            min_cache_tokens=tb_cfg.min_cache_tokens,
+        )
+
+        if tb_cfg.enable_token_eviction and total_seq_len > budget:
+            token_scores = self.importance_analyzer.compute_token_importance(
+                combined_keys, combined_values, attention_weights=attention_weights
+            )
+            selection = self.token_selector.select(
+                token_scores,
+                budget=budget,
+                sink_tokens=tb_cfg.sink_tokens,
+                recent_window=tb_cfg.recent_window,
+            )
+            self.last_selection = selection
+
+            keep_idx = selection.keep_indices
+            retained_k = combined_keys[:, :, keep_idx, :]
+            retained_v = combined_values[:, :, keep_idx, :]
+            retained_pos = combined_positions[keep_idx]
+            self.tokens_evicted += selection.num_discarded
+        else:
+            retained_k = combined_keys
+            retained_v = combined_values
+            retained_pos = combined_positions
+            self.last_selection = None
+
+        self.positions = retained_pos
+
+        # Quantize retained tokens if enabled
+        if self.config.enable_quantization:
+            if self.config.enable_adaptive_bits:
+                importance = self.importance_analyzer.compute_importance(
+                    retained_k,
+                    retained_v,
+                    attention_weights=attention_weights,
+                    group_size=self.config.quantizer.group_size,
+                )
+                self.last_allocation = self.allocator.allocate(importance)
+                allocations = self.last_allocation.allocations
+            else:
+                allocations = None
+                self.last_allocation = None
+
+            self.compressed_keys = self.quantizer.quantize(
+                retained_k, allocations=allocations
+            )
+            self.compressed_values = self.quantizer.quantize(
+                retained_v, allocations=allocations
+            )
+
+            # Keep resident reference unpopulated when quantized to save GPU memory
+            self.retained_keys = None
+            self.retained_values = None
+
+            deq_k = self.quantizer.dequantize(self.compressed_keys)
+            deq_v = self.quantizer.dequantize(self.compressed_values)
+            return deq_k, deq_v
+
+        # Unquantized path
+        self.retained_keys = retained_k
+        self.retained_values = retained_v
+        self.compressed_keys = None
+        self.compressed_values = None
+        self.last_allocation = None
+
+        return retained_k, retained_v
 
     def get_seq_length(self) -> int:
-        """Return total cached sequence length."""
-        if self._raw_keys is None:
-            return 0
-        return int(self._raw_keys.shape[-2])
+        """Return active retained sequence length."""
+        if self.positions is not None:
+            return self.positions.numel()
+        if self.retained_keys is not None:
+            return int(self.retained_keys.shape[-2])
+        if self.compressed_keys is not None:
+            return int(self.compressed_keys.shape[-2])
+        return 0
+
+    @property
+    def tokens_currently_cached(self) -> int:
+        """Number of currently active tokens in cache."""
+        return self.get_seq_length()
+
+    def get_resident_bytes(self) -> int:
+        """Return active resident memory consumption for this layer in bytes."""
+        if self.config.enable_quantization:
+            total = 0
+            if self.compressed_keys is not None:
+                total += self.compressed_keys.compressed_size_bytes
+            if self.compressed_values is not None:
+                total += self.compressed_values.compressed_size_bytes
+            return total
+        else:
+            total = 0
+            if self.retained_keys is not None:
+                total += self.retained_keys.nbytes
+            if self.retained_values is not None:
+                total += self.retained_values.nbytes
+            return total
 
 
 # ── Top-level AdaptiveKVCache ────────────────────────────────────────────────
 
 class AdaptiveKVCache(Cache):
-    """Hugging Face compatible adaptive KV-cache implementation.
+    """Hugging Face compatible adaptive KV-cache implementation with eviction and quantization.
 
     Example::
 
-        from adaptivekv import AdaptiveKVCache
+        from adaptivekv import AdaptiveKVCache, AdaptiveKVConfig, TokenBudgetConfig
 
         cache = AdaptiveKVCache(
-            bits=(2, 3, 4),
-            strategy="budget",
-            memory_budget_ratio=0.25,
+            enable_token_eviction=True,
+            max_cache_tokens=1024,
+            keep_ratio=0.5,
+            recent_window=128,
+            sink_tokens=4,
         )
     """
 
@@ -126,6 +249,14 @@ class AdaptiveKVCache(Cache):
         strategy: str = "threshold",
         memory_budget_ratio: float | None = None,
         group_size: int = 128,
+        enable_token_eviction: bool = False,
+        max_cache_tokens: int | None = None,
+        keep_ratio: float = 1.0,
+        recent_window: int = 128,
+        sink_tokens: int = 4,
+        min_cache_tokens: int = 16,
+        enable_quantization: bool = True,
+        enable_adaptive_bits: bool = True,
         **kwargs: Any,
     ) -> None:
         with contextlib.suppress(Exception):
@@ -140,9 +271,20 @@ class AdaptiveKVCache(Cache):
                 memory_budget_ratio=memory_budget_ratio,
             )
             quant_cfg = QuantizerConfig(group_size=group_size)
+            tb_cfg = TokenBudgetConfig(
+                enable_token_eviction=enable_token_eviction,
+                max_cache_tokens=max_cache_tokens,
+                keep_ratio=keep_ratio,
+                recent_window=recent_window,
+                sink_tokens=sink_tokens,
+                min_cache_tokens=min_cache_tokens,
+            )
             self.config = AdaptiveKVConfig(
                 allocation=alloc_cfg,
                 quantizer=quant_cfg,
+                token_budget=tb_cfg,
+                enable_quantization=enable_quantization,
+                enable_adaptive_bits=enable_adaptive_bits,
             )
 
         self.layers: dict[int, LayerKVCache] = {}  # type: ignore[assignment]
@@ -177,22 +319,22 @@ class AdaptiveKVCache(Cache):
         )
 
     def get_seq_length(self, layer_idx: int | None = 0) -> int:
-        """Return cached sequence length for layer."""
+        """Return active cached sequence length for layer."""
         idx = layer_idx if layer_idx is not None else 0
         if idx not in self.layers:
             return 0
         return self.layers[idx].get_seq_length()
 
     def get_max_length(self, layer_idx: int | None = None) -> int | None:  # type: ignore[override]
-        """Return maximum sequence length (unconstrained by default)."""
-        return None
+        """Return maximum sequence length."""
+        return self.config.token_budget.max_cache_tokens
 
     def get_mask_sizes(
         self,
         cache_position_or_query_length: int | torch.Tensor = 0,
         layer_idx: int = 0,
     ) -> tuple[int, int]:
-        """Return cached sequence length and offset for causal mask construction."""
+        """Return active sequence length and offset for causal mask construction."""
         seq_len = self.get_seq_length(layer_idx)
         return seq_len, 0
 
@@ -206,30 +348,80 @@ class AdaptiveKVCache(Cache):
 
     @property
     def is_compileable(self) -> bool:
-        """Return False as AdaptiveKVCache uses dynamic quantization structures."""
+        """Return False as AdaptiveKVCache uses dynamic quantization & eviction structures."""
         return False
 
+    @property
+    def tokens_seen(self) -> int:
+        """Total cumulative tokens received across all layers."""
+        if not self.layers:
+            return 0
+        return sum(layer.tokens_seen for layer in self.layers.values())
+
+    @property
+    def tokens_currently_cached(self) -> int:
+        """Total active tokens stored across all layers."""
+        if not self.layers:
+            return 0
+        return sum(layer.tokens_currently_cached for layer in self.layers.values())
+
+    @property
+    def tokens_evicted(self) -> int:
+        """Total evicted tokens across all layers."""
+        if not self.layers:
+            return 0
+        return sum(layer.tokens_evicted for layer in self.layers.values())
+
+    @property
+    def token_retention_ratio(self) -> float:
+        """Fraction of total seen tokens currently retained in cache."""
+        seen = self.tokens_seen
+        if seen == 0:
+            return 1.0
+        return self.tokens_currently_cached / float(seen)
+
     def total_compressed_size_bytes(self) -> int:
-        """Return total memory consumption across all layer caches in bytes."""
+        """Return total resident memory consumption across all layer caches in bytes."""
+        total = 0
+        for layer in self.layers.values():
+            total += layer.get_resident_bytes()
+        return total
+
+    def original_estimated_kv_bytes(self) -> int:
+        """Return memory required if all received tokens were kept uncompressed at FP16."""
         total = 0
         for layer in self.layers.values():
             if layer.compressed_keys is not None:
-                total += layer.compressed_keys.compressed_size_bytes
-            if layer.compressed_values is not None:
-                total += layer.compressed_values.compressed_size_bytes
+                shape = layer.compressed_keys.shape
+                batch = shape[0] if len(shape) >= 1 else 1
+                heads = shape[1] if len(shape) >= 2 else 1
+                hdim = shape[-1] if len(shape) >= 4 else 64
+            elif layer.retained_keys is not None:
+                shape = layer.retained_keys.shape
+                batch = shape[0] if len(shape) >= 1 else 1
+                heads = shape[1] if len(shape) >= 2 else 1
+                hdim = shape[-1] if len(shape) >= 4 else 64
+            else:
+                batch, heads, hdim = 1, 8, 64
+
+            # 2 bytes per FP16 element * 2 (keys + values)
+            layer_orig_bytes = layer.tokens_seen * batch * heads * hdim * 2 * 2
+            total += layer_orig_bytes
         return total
 
     def overall_compression_ratio(self) -> float:
-        """Return overall compression ratio across all layers."""
-        orig_bytes = 0
-        comp_bytes = 0
-        for layer in self.layers.values():
-            if layer.compressed_keys is not None and layer.compressed_values is not None:
-                orig_bytes += layer.compressed_keys.original_size_bytes
-                orig_bytes += layer.compressed_values.original_size_bytes
-                comp_bytes += layer.compressed_keys.compressed_size_bytes
-                comp_bytes += layer.compressed_values.compressed_size_bytes
-
+        """Return overall memory reduction ratio relative to uncompressed full-precision history."""
+        orig_bytes = self.original_estimated_kv_bytes()
+        comp_bytes = self.total_compressed_size_bytes()
         if comp_bytes == 0:
             return 0.0
-        return orig_bytes / comp_bytes
+        if orig_bytes == 0:
+            # Fallback to ratio calculated over active compressed layers
+            for layer in self.layers.values():
+                if layer.compressed_keys is not None and layer.compressed_values is not None:
+                    orig_bytes += layer.compressed_keys.original_size_bytes
+                    orig_bytes += layer.compressed_values.original_size_bytes
+                    comp_bytes += layer.compressed_keys.compressed_size_bytes
+                    comp_bytes += layer.compressed_values.compressed_size_bytes
+            return orig_bytes / comp_bytes if comp_bytes > 0 else 0.0
+        return orig_bytes / float(comp_bytes)

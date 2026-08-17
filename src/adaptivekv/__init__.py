@@ -1,7 +1,7 @@
 """AdaptiveKV — Adaptive KV-cache compression for LLM inference.
 
-This package provides dynamic bit-allocation for KV-cache quantization,
-enabling better memory-vs-quality tradeoffs compared to fixed-bit schemes.
+This package provides dynamic token-level eviction and bit-allocation for KV-cache quantization,
+enabling substantial memory savings during long-context LLM inference.
 """
 
 from __future__ import annotations
@@ -17,7 +17,9 @@ from adaptivekv.config import (
     ImportanceConfig,
     ImportanceStrategy,
     QuantizerConfig,
+    TokenBudgetConfig,
 )
+from adaptivekv.controller import TokenBudgetController
 from adaptivekv.exceptions import (
     AdaptiveKVError,
     AllocationError,
@@ -56,6 +58,8 @@ from adaptivekv.metrics import (
     GenerationMetrics,
     MemoryMetrics,
     QualityMetrics,
+    TokenRetentionMetrics,
+    compute_cache_statistics,
     compute_generation_metrics,
     compute_memory_metrics,
     compute_perplexity,
@@ -69,6 +73,7 @@ from adaptivekv.quantizer import (
     pack_bits,
     unpack_bits,
 )
+from adaptivekv.selector import TokenSelectionResult, TokenSelector
 
 __all__ = [
     # Version
@@ -80,6 +85,7 @@ __all__ = [
     "AllocationStrategy",
     "ImportanceConfig",
     "ImportanceStrategy",
+    "TokenBudgetConfig",
     # Exceptions
     "AdaptiveKVError",
     "ConfigurationError",
@@ -108,6 +114,10 @@ __all__ = [
     "HeadImportanceAnalyzer",
     "ImportanceScore",
     "create_importance_analyzer",
+    # Selector & Controller
+    "TokenSelector",
+    "TokenSelectionResult",
+    "TokenBudgetController",
     # Allocator
     "AdaptiveBitAllocator",
     "AllocationResult",
@@ -122,11 +132,13 @@ __all__ = [
     "QualityMetrics",
     "MemoryMetrics",
     "GenerationMetrics",
+    "TokenRetentionMetrics",
     "EvaluationReport",
     "compute_quality_metrics",
     "compute_memory_metrics",
     "compute_generation_metrics",
     "compute_perplexity",
+    "compute_cache_statistics",
     # Kernels
     "is_triton_available",
     "is_cuda_available",

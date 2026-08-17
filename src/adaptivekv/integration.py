@@ -1,7 +1,7 @@
 """Hugging Face integration adapters for AdaptiveKV.
 
 Provides model validation, compatibility checking, and adapter binding for supported
-decoder-only Hugging Face architectures (Llama, Mistral, Qwen2, Gemma, OPT).
+decoder-only Hugging Face architectures (Llama, Mistral, Qwen2, Gemma, OPT, GPT-NeoX, GPT-2).
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ SUPPORTED_MODEL_TYPES: tuple[str, ...] = (
     "gemma",
     "opt",
     "gpt_neox",
+    "gpt2",
 )
 """Tuple of Hugging Face model architecture identifiers supported by AdaptiveKV."""
 
@@ -82,7 +83,7 @@ class HuggingFaceAdapter:
             Tuple of (model, adaptive_kv_cache).
         """
         self.validate_model(model)
-        adaptive_cache = cache or AdaptiveKVCache(config=config)
+        adaptive_cache = cache if cache is not None else AdaptiveKVCache(config=config)
         return model, adaptive_cache
 
 
@@ -92,21 +93,44 @@ def apply_adaptive_kv(
     bits: tuple[int, ...] = (2, 3, 4),
     strategy: str = "threshold",
     memory_budget_ratio: float | None = None,
+    enable_token_eviction: bool = False,
+    max_cache_tokens: int | None = None,
+    keep_ratio: float = 1.0,
+    recent_window: int = 128,
+    sink_tokens: int = 4,
+    min_cache_tokens: int = 16,
+    enable_quantization: bool = True,
+    enable_adaptive_bits: bool = True,
 ) -> tuple[torch.nn.Module, AdaptiveKVCache]:
     """Helper function to validate and attach AdaptiveKVCache to a Hugging Face model.
 
     Example::
 
-        from adaptivekv.integration import apply_adaptive_kv
+        from adaptivekv import apply_adaptive_kv
 
-        model, cache = apply_adaptive_kv(model, strategy="budget", memory_budget_ratio=0.25)
+        model, cache = apply_adaptive_kv(
+            model,
+            enable_token_eviction=True,
+            max_cache_tokens=1024,
+            keep_ratio=0.5,
+        )
         outputs = model.generate(**inputs, past_key_values=cache)
     """
     adapter = HuggingFaceAdapter()
-    cache = AdaptiveKVCache(
-        config=config,
-        bits=bits,
-        strategy=strategy,
-        memory_budget_ratio=memory_budget_ratio,
-    )
+    if config is not None:
+        cache = AdaptiveKVCache(config=config)
+    else:
+        cache = AdaptiveKVCache(
+            bits=bits,
+            strategy=strategy,
+            memory_budget_ratio=memory_budget_ratio,
+            enable_token_eviction=enable_token_eviction,
+            max_cache_tokens=max_cache_tokens,
+            keep_ratio=keep_ratio,
+            recent_window=recent_window,
+            sink_tokens=sink_tokens,
+            min_cache_tokens=min_cache_tokens,
+            enable_quantization=enable_quantization,
+            enable_adaptive_bits=enable_adaptive_bits,
+        )
     return adapter.attach_cache(model, cache=cache)

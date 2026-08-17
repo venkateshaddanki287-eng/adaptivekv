@@ -2,6 +2,7 @@
 
 Provides abstractions and implementations for computing entry importance across
 attention-based, magnitude-based, recency-based, layer-wise, and head-wise strategies.
+Supports both group-level importance scoring and token-level importance scoring.
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ class BaseImportanceAnalyzer(ABC):
         attention_weights: torch.Tensor | None = None,
         group_size: int = 128,
     ) -> ImportanceScore:
-        """Compute normalized importance scores for KV-cache states.
+        """Compute normalized group-level importance scores for KV-cache states.
 
         Args:
             key_states: Key tensor of shape (batch, num_heads, seq_len, head_dim) or similar.
@@ -62,6 +63,24 @@ class BaseImportanceAnalyzer(ABC):
 
         Returns:
             ImportanceScore dataclass containing 1D normalized scores in [0, 1].
+        """
+
+    @abstractmethod
+    def compute_token_importance(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        attention_weights: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute token-level normalized importance scores in [0.0, 1.0].
+
+        Args:
+            key_states: Key tensor of shape (batch, num_heads, seq_len, head_dim) or similar.
+            value_states: Value tensor of same shape as key_states.
+            attention_weights: Optional attention weight tensor (batch, num_heads, q_len, kv_seq_len).
+
+        Returns:
+            1D float32 tensor of shape (seq_len,) containing normalized importance score per token.
         """
 
     def _normalize(self, scores: torch.Tensor) -> torch.Tensor:
@@ -120,18 +139,16 @@ class AttentionImportanceAnalyzer(BaseImportanceAnalyzer):
     to key vector norm.
     """
 
-    def compute_importance(
+    def compute_token_importance(
         self,
         key_states: torch.Tensor,
         value_states: torch.Tensor,
         attention_weights: torch.Tensor | None = None,
-        group_size: int = 128,
-    ) -> ImportanceScore:
-        """Compute attention-based importance scores."""
+    ) -> torch.Tensor:
+        """Compute token-level attention importance scores."""
         if key_states.numel() == 0:
             raise ImportanceError("Cannot compute importance for empty key_states.")
 
-        device = key_states.device
         dtype = torch.float32
 
         if attention_weights is not None and attention_weights.numel() > 0:
@@ -152,6 +169,26 @@ class AttentionImportanceAnalyzer(BaseImportanceAnalyzer):
                     token_scores = norms
             else:
                 token_scores = torch.abs(k.reshape(-1))
+
+        return self._normalize(token_scores)
+
+    def compute_importance(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        attention_weights: torch.Tensor | None = None,
+        group_size: int = 128,
+    ) -> ImportanceScore:
+        """Compute attention-based group-level importance scores."""
+        if key_states.numel() == 0:
+            raise ImportanceError("Cannot compute importance for empty key_states.")
+
+        device = key_states.device
+        dtype = torch.float32
+
+        token_scores = self.compute_token_importance(
+            key_states, value_states, attention_weights=attention_weights
+        )
 
         total_elements = key_states.numel()
         num_groups = max(1, math_ceil_div(total_elements, group_size))
@@ -181,6 +218,33 @@ class AttentionImportanceAnalyzer(BaseImportanceAnalyzer):
 class MagnitudeImportanceAnalyzer(BaseImportanceAnalyzer):
     """Computes KV-cache importance based on key & value L2 vector magnitudes."""
 
+    def compute_token_importance(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        attention_weights: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute token-level magnitude importance scores."""
+        if key_states.numel() == 0:
+            raise ImportanceError("Cannot compute importance for empty key_states.")
+
+        k = key_states.to(torch.float32)
+        v = value_states.to(torch.float32)
+
+        if k.ndim >= 2 and v.ndim >= 2:
+            k_norms = torch.norm(k, p=2, dim=-1)
+            v_norms = torch.norm(v, p=2, dim=-1)
+            combined = k_norms + v_norms
+            if combined.ndim > 1:
+                dim_indices = tuple(range(combined.ndim - 1))
+                token_scores = torch.mean(combined, dim=dim_indices)
+            else:
+                token_scores = combined
+        else:
+            token_scores = torch.abs(k.reshape(-1)) + torch.abs(v.reshape(-1))
+
+        return self._normalize(token_scores)
+
     def compute_importance(
         self,
         key_states: torch.Tensor,
@@ -209,6 +273,26 @@ class MagnitudeImportanceAnalyzer(BaseImportanceAnalyzer):
 
 class RecencyImportanceAnalyzer(BaseImportanceAnalyzer):
     """Computes KV-cache importance based on token recency (newer tokens = higher score)."""
+
+    def compute_token_importance(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        attention_weights: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute token-level recency importance scores."""
+        if key_states.numel() == 0:
+            raise ImportanceError("Cannot compute importance for empty key_states.")
+
+        seq_len = key_states.shape[-2] if key_states.ndim >= 2 else key_states.numel()
+        if seq_len <= 1:
+            token_scores = torch.ones(seq_len, dtype=torch.float32, device=key_states.device)
+        else:
+            token_scores = torch.linspace(
+                0.0, 1.0, steps=seq_len, dtype=torch.float32, device=key_states.device
+            )
+
+        return self._normalize(token_scores)
 
     def compute_importance(
         self,
@@ -240,6 +324,29 @@ class RecencyImportanceAnalyzer(BaseImportanceAnalyzer):
 class HeadImportanceAnalyzer(BaseImportanceAnalyzer):
     """Computes KV-cache importance per attention head."""
 
+    def compute_token_importance(
+        self,
+        key_states: torch.Tensor,
+        value_states: torch.Tensor,
+        attention_weights: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Compute token-level head-wise importance scores."""
+        if key_states.numel() == 0:
+            raise ImportanceError("Cannot compute importance for empty key_states.")
+
+        k = key_states.to(torch.float32)
+        if k.ndim >= 2:
+            norms = torch.norm(k, p=2, dim=-1)
+            if norms.ndim > 1:
+                dim_indices = tuple(range(norms.ndim - 1))
+                token_scores = torch.mean(norms, dim=dim_indices)
+            else:
+                token_scores = norms
+        else:
+            token_scores = torch.norm(k, p=2, dim=-1).reshape(-1)
+
+        return self._normalize(token_scores)
+
     def compute_importance(
         self,
         key_states: torch.Tensor,
@@ -252,7 +359,6 @@ class HeadImportanceAnalyzer(BaseImportanceAnalyzer):
 
         k = key_states.to(torch.float32)
         if k.ndim >= 3:
-            # Aggregate over heads (dim 1 if shape is batch, heads, seq, dim)
             head_norms = torch.norm(k, p=2, dim=-1)
             token_scores = torch.mean(head_norms, dim=0).reshape(-1)
         else:

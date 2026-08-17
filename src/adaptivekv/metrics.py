@@ -1,15 +1,19 @@
 """Compression, accuracy, and generation latency metrics for AdaptiveKV.
 
 Provides evaluation utilities for measuring reconstruction quality (MSE, Cosine Similarity),
-memory savings, generation latency, throughput, and perplexity.
+memory savings, token retention, generation latency, throughput, and perplexity.
 """
 
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 import torch
+
+if TYPE_CHECKING:
+    from adaptivekv.cache import AdaptiveKVCache
 
 # ── Metric Data Structures ──────────────────────────────────────────────────
 
@@ -48,6 +52,23 @@ class MemoryMetrics:
 
 
 @dataclass
+class TokenRetentionMetrics:
+    """Token retention and eviction statistics.
+
+    Attributes:
+        tokens_seen: Total cumulative tokens processed across all layers.
+        tokens_currently_cached: Total active cached tokens stored across all layers.
+        tokens_evicted: Total tokens pruned from cache.
+        token_retention_ratio: Fraction of tokens retained (tokens_currently_cached / tokens_seen).
+    """
+
+    tokens_seen: int
+    tokens_currently_cached: int
+    tokens_evicted: int
+    token_retention_ratio: float
+
+
+@dataclass
 class GenerationMetrics:
     """Inference throughput and latency metrics.
 
@@ -64,10 +85,11 @@ class GenerationMetrics:
 
 @dataclass
 class EvaluationReport:
-    """Unified evaluation report combining quality, memory, and generation metrics."""
+    """Unified evaluation report combining quality, memory, token retention, and generation metrics."""
 
     quality: QualityMetrics
     memory: MemoryMetrics
+    token_retention: TokenRetentionMetrics | None = None
     generation: GenerationMetrics | None = None
     perplexity: float | None = None
 
@@ -185,3 +207,33 @@ def compute_perplexity(logits: torch.Tensor, target_ids: torch.Tensor) -> float:
         shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1)
     )
     return float(math.exp(loss.item()))
+
+
+def compute_cache_statistics(cache: AdaptiveKVCache) -> dict[str, Any]:
+    """Compute detailed cache retention and resident memory statistics.
+
+    Args:
+        cache: AdaptiveKVCache instance.
+
+    Returns:
+        Dictionary of cache metrics.
+    """
+    seen = cache.tokens_seen
+    cached = cache.tokens_currently_cached
+    evicted = cache.tokens_evicted
+    retention_ratio = cache.token_retention_ratio
+    orig_bytes = cache.original_estimated_kv_bytes()
+    curr_bytes = cache.total_compressed_size_bytes()
+    saved_bytes = max(0, orig_bytes - curr_bytes)
+    red_pct = ((1.0 - curr_bytes / float(orig_bytes)) * 100.0) if orig_bytes > 0 else 0.0
+
+    return {
+        "tokens_seen": seen,
+        "tokens_currently_cached": cached,
+        "tokens_evicted": evicted,
+        "token_retention_ratio": retention_ratio,
+        "original_estimated_kv_bytes": orig_bytes,
+        "current_kv_bytes": curr_bytes,
+        "memory_saved_bytes": saved_bytes,
+        "memory_reduction_percent": red_pct,
+    }

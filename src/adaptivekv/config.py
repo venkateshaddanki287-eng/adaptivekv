@@ -141,6 +141,49 @@ class ImportanceConfig:
             )
 
 
+@dataclass(frozen=True)
+class TokenBudgetConfig:
+    """Configuration for token-level cache budget control and eviction.
+
+    Attributes:
+        enable_token_eviction: Whether to prune unwanted KV tokens when over budget.
+        max_cache_tokens: Maximum active cached tokens per layer. None = unconstrained.
+        keep_ratio: Fraction of compressible historical tokens to retain in [0.0, 1.0].
+        recent_window: Number of most recent tokens protected from eviction.
+        sink_tokens: Number of initial prefix tokens protected from eviction.
+        min_cache_tokens: Minimum total cached tokens guaranteed per layer.
+    """
+
+    enable_token_eviction: bool = False
+    max_cache_tokens: int | None = None
+    keep_ratio: float = 1.0
+    recent_window: int = 128
+    sink_tokens: int = 4
+    min_cache_tokens: int = 16
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.keep_ratio <= 1.0:
+            raise ConfigurationError(
+                f"keep_ratio must be in [0.0, 1.0], got {self.keep_ratio}"
+            )
+        if self.recent_window < 0:
+            raise ConfigurationError(
+                f"recent_window must be >= 0, got {self.recent_window}"
+            )
+        if self.sink_tokens < 0:
+            raise ConfigurationError(
+                f"sink_tokens must be >= 0, got {self.sink_tokens}"
+            )
+        if self.min_cache_tokens < 0:
+            raise ConfigurationError(
+                f"min_cache_tokens must be >= 0, got {self.min_cache_tokens}"
+            )
+        if self.max_cache_tokens is not None and self.max_cache_tokens < 1:
+            raise ConfigurationError(
+                f"max_cache_tokens must be >= 1 or None, got {self.max_cache_tokens}"
+            )
+
+
 # ── Top-level config ────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
@@ -149,19 +192,22 @@ class AdaptiveKVConfig:
 
     Example::
 
-        from adaptivekv.config import AdaptiveKVConfig
+        from adaptivekv.config import AdaptiveKVConfig, TokenBudgetConfig
 
         cfg = AdaptiveKVConfig()           # all defaults
         cfg = AdaptiveKVConfig(
+            token_budget=TokenBudgetConfig(enable_token_eviction=True, max_cache_tokens=1024),
             quantizer=QuantizerConfig(bit_width=3),
             allocation=AllocationConfig(strategy="budget", memory_budget_ratio=0.3),
         )
 
     Attributes:
-        quantizer: Default quantizer settings (individual allocations may
-            override ``bit_width``).
+        quantizer: Default quantizer settings.
         allocation: Adaptive bit-allocation settings.
         importance: Importance-scoring settings.
+        token_budget: Token-level eviction and budget settings.
+        enable_quantization: Whether quantization is enabled.
+        enable_adaptive_bits: Whether adaptive bit allocation is enabled.
         device: Torch device string (``"cpu"``, ``"cuda"``, etc.).
         dtype: Working dtype for dequantized values.
     """
@@ -169,6 +215,9 @@ class AdaptiveKVConfig:
     quantizer: QuantizerConfig = field(default_factory=QuantizerConfig)
     allocation: AllocationConfig = field(default_factory=AllocationConfig)
     importance: ImportanceConfig = field(default_factory=ImportanceConfig)
+    token_budget: TokenBudgetConfig = field(default_factory=TokenBudgetConfig)
+    enable_quantization: bool = True
+    enable_adaptive_bits: bool = True
     device: str = "cpu"
     dtype: str = "float16"
 
@@ -178,3 +227,4 @@ class AdaptiveKVConfig:
             raise ConfigurationError(
                 f"Unsupported dtype '{self.dtype}'. Choose from {valid_dtypes}"
             )
+
