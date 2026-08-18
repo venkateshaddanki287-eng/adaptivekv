@@ -40,7 +40,7 @@ AdaptiveKV dynamically evaluates the attention importance of KV blocks during pr
 | **AdaptiveKV (Budget 25%)** | 19,456.0 | **3.37x** | **70.3%** | **0.010088** | **0.9951** | **96.9%** | **3103.19 $\pm$ 84.1** *(Experimental)* |
 | **Random Allocation (Ablation)**| 13,312.0 | 4.92x | 79.7% | 0.189421 | 0.9215 | 81.3% | 445.10 $\pm$ 14.1 |
 
-For full scientific documentation, see [FINAL_VALIDATION_REPORT.md](file:///c:/Users/nagaraju/Downloads/AdaptiveKV%20lab/research/FINAL_VALIDATION_REPORT.md).
+For full scientific documentation, see [FINAL_VALIDATION_REPORT.md](research/FINAL_VALIDATION_REPORT.md).
 
 ---
 

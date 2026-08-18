@@ -29,11 +29,11 @@ def cmd_info(args: argparse.Namespace) -> None:
     print(f"CUDA Hardware:         {torch.cuda.is_available()}")
     if torch.cuda.is_available():
         print(f"GPU Model:             {torch.cuda.get_device_name(0)}")
-    print(f"Supported Bit-Widths:  (2, 3, 4)")
-    print(f"Allocation Strategies: threshold, budget")
-    print(f"Importance Strategies: attention, magnitude, recency")
-    print(f"Default Group Size:    128")
-    print(f"License:               Apache-2.0")
+    print("Supported Bit-Widths:  (2, 3, 4)")
+    print("Allocation Strategies: threshold, budget")
+    print("Importance Strategies: attention, magnitude, recency")
+    print("Default Group Size:    128")
+    print("License:               Apache-2.0")
     print("=" * 38)
 
 
