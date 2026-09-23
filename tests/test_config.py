@@ -149,6 +149,7 @@ class TestEnums:
     def test_allocation_strategy_values(self) -> None:
         assert AllocationStrategy.THRESHOLD.value == "threshold"
         assert AllocationStrategy.BUDGET.value == "budget"
+        assert AllocationStrategy.RANDOM.value == "random"
 
     def test_importance_strategy_values(self) -> None:
         assert ImportanceStrategy.ATTENTION.value == "attention"

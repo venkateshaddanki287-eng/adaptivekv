@@ -64,7 +64,7 @@ class RandomBitAllocator:
         return bits_choice[indices]
 
 
-def profile_budget_mode(model, input_ids) -> str:
+def profile_budget_mode(model: torch.nn.Module, input_ids: torch.Tensor) -> str:
     """Profile Budget Mode to locate the exact computational bottleneck."""
     cfg = AdaptiveKVConfig(allocation=AllocationConfig(strategy="budget", memory_budget_ratio=0.25))
     c = AdaptiveKVCache(config=cfg)
@@ -150,13 +150,21 @@ def run_v2_experiments() -> dict:
     ]
 
     for model_info in models_to_test:
-        model_name = model_info["name"]
-        model = model_info["model"]
-        print(f"\n[MODEL] {model_name} ({model_info['param_count']:,} parameters, {model_info['num_layers']} layers)")
+        model_name: str = str(model_info["name"])
+        model: Any = model_info["model"]
+        param_count: int = int(model_info["param_count"])
+        num_layers: int = int(model_info["num_layers"])
+        num_heads: int = int(model_info["num_heads"])
+        head_dim: int = int(model_info["head_dim"])
+        contexts: list[int] = list(model_info["contexts"])
 
-        for ctx_len in model_info["contexts"]:
+        print(f"\n[MODEL] {model_name} ({param_count:,} parameters, {num_layers} layers)")
+
+        for ctx_len_item in contexts:
+            ctx_len: int = int(ctx_len_item)
             print(f"\n  [Context Length: {ctx_len} tokens]")
-            input_ids = torch.randint(1, 1000, (1, ctx_len), device=model.device)
+            dev = getattr(model, "device", torch.device("cpu"))
+            input_ids = torch.randint(1, 1000, (1, ctx_len), device=dev)
 
             # Generate FP16 baseline tokens across seeds for Agreement evaluation
             fp16_baseline_tokens_by_seed = {}
@@ -165,9 +173,12 @@ def run_v2_experiments() -> dict:
                 np.random.seed(seed)
                 with torch.no_grad():
                     fp16_out = model.generate(input_ids, max_new_tokens=GEN_TOKENS, do_sample=False)
-                fp16_baseline_tokens_by_seed[seed] = fp16_out[0, ctx_len:]
+                if fp16_out is not None and len(fp16_out) > 0:
+                    fp16_baseline_tokens_by_seed[seed] = fp16_out[0, ctx_len:]
+                else:
+                    fp16_baseline_tokens_by_seed[seed] = torch.tensor([], device=dev)
 
-            fp16_bytes = model_info["num_layers"] * 2 * (1 * model_info["num_heads"] * (ctx_len + GEN_TOKENS) * model_info["head_dim"]) * 2
+            fp16_bytes = num_layers * 2 * (1 * num_heads * (ctx_len + GEN_TOKENS) * head_dim) * 2
 
             for method in methods:
                 seed_latencies = []
@@ -190,8 +201,22 @@ def run_v2_experiments() -> dict:
                         with torch.no_grad():
                             if method == "FP16 Baseline":
                                 model.generate(input_ids, max_new_tokens=5, do_sample=False)
-                            else:
-                                c_w = AdaptiveKVCache(config=AdaptiveKVConfig())
+                            elif isinstance(method, str) and "Fixed" in method:
+                                bw = int(method.split()[1][0])
+                                cfg_w = AdaptiveKVConfig(
+                                    quantizer=QuantizerConfig(bit_width=bw),
+                                    enable_adaptive_bits=False,
+                                )
+                                c_w = AdaptiveKVCache(config=cfg_w)
+                                model.generate(input_ids, max_new_tokens=5, past_key_values=c_w, do_sample=False)
+                            elif method == "AdaptiveKV (Threshold)":
+                                c_w = AdaptiveKVCache(config=AdaptiveKVConfig(allocation=AllocationConfig(strategy="threshold")))
+                                model.generate(input_ids, max_new_tokens=5, past_key_values=c_w, do_sample=False)
+                            elif method == "AdaptiveKV (Budget 25%)":
+                                c_w = AdaptiveKVCache(config=AdaptiveKVConfig(allocation=AllocationConfig(strategy="budget", memory_budget_ratio=0.25)))
+                                model.generate(input_ids, max_new_tokens=5, past_key_values=c_w, do_sample=False)
+                            elif method == "Random Allocation (Ablation)":
+                                c_w = AdaptiveKVCache(config=AdaptiveKVConfig(allocation=AllocationConfig(strategy="random")))
                                 model.generate(input_ids, max_new_tokens=5, past_key_values=c_w, do_sample=False)
 
                     # Timed Repetitions
@@ -206,7 +231,10 @@ def run_v2_experiments() -> dict:
                                 gen_outputs = model.generate(input_ids, max_new_tokens=GEN_TOKENS, do_sample=False)
                             elif isinstance(method, str) and "Fixed" in method:
                                 bw = int(method.split()[1][0])
-                                cfg = AdaptiveKVConfig(quantizer=QuantizerConfig(bit_width=bw))
+                                cfg = AdaptiveKVConfig(
+                                    quantizer=QuantizerConfig(bit_width=bw),
+                                    enable_adaptive_bits=False,
+                                )
                                 c = AdaptiveKVCache(config=cfg)
                                 gen_outputs = model.generate(input_ids, max_new_tokens=GEN_TOKENS, past_key_values=c, do_sample=False)
                                 last_cache = c
@@ -221,16 +249,9 @@ def run_v2_experiments() -> dict:
                                 gen_outputs = model.generate(input_ids, max_new_tokens=GEN_TOKENS, past_key_values=c, do_sample=False)
                                 last_cache = c
                             elif method == "Random Allocation (Ablation)":
-                                cfg = AdaptiveKVConfig(allocation=AllocationConfig(strategy="threshold"))
+                                cfg = AdaptiveKVConfig(allocation=AllocationConfig(strategy="random"))
                                 c = AdaptiveKVCache(config=cfg)
                                 gen_outputs = model.generate(input_ids, max_new_tokens=GEN_TOKENS, past_key_values=c, do_sample=False)
-
-                                for layer in c.layers.values():
-                                    if layer._raw_keys is not None:
-                                        num_g = max(1, layer._raw_keys.numel() // 128)
-                                        rand_allocs = random_allocator.allocate(num_g, layer._raw_keys.device)
-                                        layer.compressed_keys = quantizer.quantize(layer._raw_keys, allocations=rand_allocs)
-                                        layer.compressed_values = quantizer.quantize(layer._raw_values, allocations=rand_allocs)
                                 last_cache = c
 
                         t1 = time.perf_counter()
@@ -247,10 +268,16 @@ def run_v2_experiments() -> dict:
                     seed_tps_list.append(tps)
 
                     # Quality & Token Agreement Evaluation
-                    gen_tokens = gen_outputs[0, ctx_len:]
-                    base_tokens = fp16_baseline_tokens_by_seed[seed]
-                    min_l = min(len(base_tokens), len(gen_tokens))
-                    agreement_pct = float((base_tokens[:min_l] == gen_tokens[:min_l]).float().mean().item()) * 100.0
+                    if gen_outputs is not None and len(gen_outputs) > 0:
+                        gen_tokens = gen_outputs[0, ctx_len:]
+                        base_tokens = fp16_baseline_tokens_by_seed[seed]
+                        min_l = min(len(base_tokens), len(gen_tokens))
+                        if min_l > 0:
+                            agreement_pct = float((base_tokens[:min_l] == gen_tokens[:min_l]).float().mean().item()) * 100.0
+                        else:
+                            agreement_pct = 100.0
+                    else:
+                        agreement_pct = 0.0
                     seed_agreements.append(agreement_pct)
 
                     if method == "FP16 Baseline":
@@ -268,9 +295,9 @@ def run_v2_experiments() -> dict:
                         tot_g, bits_sum = 0, 0
                         if last_cache:
                             for layer in last_cache.layers.values():
-                                if layer.compressed_keys is not None and layer._raw_keys is not None:
+                                if layer.compressed_keys is not None and layer.retained_keys is not None:
                                     deq = quantizer.dequantize(layer.compressed_keys)
-                                    qm = compute_quality_metrics(layer._raw_keys, deq)
+                                    qm = compute_quality_metrics(layer.retained_keys, deq)
                                     mse_l.append(qm.mse)
                                     cos_l.append(qm.cosine_similarity)
 

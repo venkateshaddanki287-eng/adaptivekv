@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptivekv"
-version = "0.1.0"
+version = "0.1.1"
 description = "Adaptive KV-cache compression for LLM inference via dynamic token eviction and bit allocation."
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 authors = [
-    {name = "Venkatesh Addanki", email = "venkateshaddanki287@gmail.com"},
+    {name = "AdaptiveKV Team"},
 ]
 keywords = [
     "llm",

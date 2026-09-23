@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="AdaptiveKV — Dynamic bit-allocation for KV-cache compression">
+  <defs>
+    <linearGradient id="akv-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#05070f"/>
+      <stop offset="0.55" stop-color="#0a1020"/>
+      <stop offset="1" stop-color="#120f2b"/>
+    </linearGradient>
+    <linearGradient id="akv-title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e6fff8"/>
+      <stop offset="0.45" stop-color="#34d399"/>
+      <stop offset="0.78" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="akv-bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="0.5" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <pattern id="akv-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#16213a" stroke-width="1"/>
+    </pattern>
+    <clipPath id="akv-clip">
+      <rect x="0" y="0" width="1200" height="320" rx="22" />
+    </clipPath>
+    <filter id="akv-blur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="46"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#akv-clip)">
+    <rect x="0" y="0" width="1200" height="320" fill="url(#akv-bg)"/>
+    <rect x="0" y="0" width="1200" height="320" fill="url(#akv-grid)" opacity="0.55"/>
+    <circle cx="150" cy="40" r="130" fill="#34d399" opacity="0.16" filter="url(#akv-blur)"/>
+    <circle cx="1060" cy="300" r="150" fill="#7c3aed" opacity="0.20" filter="url(#akv-blur)"/>
+    <circle cx="760" cy="40" r="90" fill="#22d3ee" opacity="0.10" filter="url(#akv-blur)"/>
+
+    <!-- version pill -->
+    <rect x="64" y="48" width="264" height="32" rx="16" fill="#0d1730" stroke="#243352" stroke-width="1.5"/>
+    <circle cx="86" cy="64" r="4" fill="#34d399"/>
+    <text x="100" y="69" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace" font-size="12.5" letter-spacing="1.6" fill="#7dd3fc">v0.1.1 · RESEARCH PREVIEW</text>
+
+    <!-- wordmark -->
+    <text x="62" y="168" font-family="'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif" font-size="78" font-weight="800" letter-spacing="-2" fill="url(#akv-title)">AdaptiveKV</text>
+    <text x="64" y="210" font-family="'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif" font-size="24" fill="#a7b6d4">Dynamic bit-allocation for KV-cache compression</text>
+    <text x="64" y="244" font-family="'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif" font-size="16.5" fill="#5d6d8c">Importance-aware 2/3/4-bit packing for long-context LLM inference</text>
+
+    <!-- allocation strip: per-layer runs of 4/3/2-bit blocks -->
+    <text x="706" y="58" text-anchor="end" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace" font-size="11.5" letter-spacing="1.2" fill="#4a5a7a">PER-BLOCK BIT ALLOCATION</text>
+
+    <text x="700" y="99" text-anchor="end" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="11.5" fill="#3f5070">L00</text>
+    <rect x="720" y="86" width="163" height="16" rx="4" fill="#34d399"/>
+    <rect x="888" y="86" width="58" height="16" rx="4" fill="#fbbf24"/>
+    <rect x="951" y="86" width="142" height="16" rx="4" fill="#334155"/>
+
+    <text x="700" y="143" text-anchor="end" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="11.5" fill="#3f5070">L01</text>
+    <rect x="720" y="130" width="100" height="16" rx="4" fill="#34d399"/>
+    <rect x="825" y="130" width="79" height="16" rx="4" fill="#fbbf24"/>
+    <rect x="909" y="130" width="184" height="16" rx="4" fill="#334155"/>
+
+    <text x="700" y="187" text-anchor="end" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="11.5" fill="#3f5070">L02</text>
+    <rect x="720" y="174" width="76" height="16" rx="4" fill="#34d399"/>
+    <rect x="801" y="174" width="79" height="16" rx="4" fill="#fbbf24"/>
+    <rect x="885" y="174" width="205" height="16" rx="4" fill="#334155"/>
+
+    <text x="700" y="231" text-anchor="end" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="11.5" fill="#3f5070">L03</text>
+    <rect x="720" y="218" width="142" height="16" rx="4" fill="#34d399"/>
+    <rect x="867" y="218" width="100" height="16" rx="4" fill="#fbbf24"/>
+    <rect x="972" y="218" width="121" height="16" rx="4" fill="#334155"/>
+
+    <!-- legend -->
+    <rect x="720" y="266" width="12" height="12" rx="3" fill="#34d399"/>
+    <text x="739" y="276" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#8b9ab8">4-bit</text>
+    <rect x="800" y="266" width="12" height="12" rx="3" fill="#fbbf24"/>
+    <text x="819" y="276" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#8b9ab8">3-bit</text>
+    <rect x="880" y="266" width="12" height="12" rx="3" fill="#334155"/>
+    <text x="899" y="276" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#8b9ab8">2-bit</text>
+    <text x="964" y="276" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#3f5070">← low importance</text>
+
+    <rect x="0" y="314" width="1200" height="6" fill="url(#akv-bar)"/>
+  </g>
+  <rect x="0.75" y="0.75" width="1198.5" height="318.5" rx="21" fill="none" stroke="#1d2a45" stroke-width="1.5"/>
+</svg>

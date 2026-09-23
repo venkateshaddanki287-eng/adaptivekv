@@ -72,3 +72,20 @@ class TestAdaptiveBitAllocatorBudget:
         importance = ImportanceScore(scores=torch.empty(0), strategy="attention", group_size=128)
         with pytest.raises(AllocationError):
             allocator.allocate(importance)
+
+
+class TestAdaptiveBitAllocatorRandom:
+    """Test random bit allocation strategy."""
+
+    def test_random_allocation(self) -> None:
+        allocator = AdaptiveBitAllocator()
+        scores = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8])
+        importance = ImportanceScore(scores=scores, strategy="attention", group_size=128)
+        cfg = AllocationConfig(strategy="random", bits=(2, 3, 4), thresholds=(0.33, 0.66))
+        res = allocator.allocate(importance, config=cfg)
+
+        assert isinstance(res, AllocationResult)
+        assert res.strategy == "random"
+        assert res.allocations.numel() == 8
+        assert all(b.item() in (2, 3, 4) for b in res.allocations)
+

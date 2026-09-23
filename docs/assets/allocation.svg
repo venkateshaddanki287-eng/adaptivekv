@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" width="1200" height="400" role="img" aria-label="Attention importance drives per-token bit allocation">
+  <defs>
+    <linearGradient id="al-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#060810"/>
+      <stop offset="1" stop-color="#0e1024"/>
+    </linearGradient>
+    <linearGradient id="al-area" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0.02"/>
+    </linearGradient>
+    <clipPath id="al-clip">
+      <rect x="0" y="0" width="1200" height="400" rx="22"/>
+    </clipPath>
+    <filter id="al-blur" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="42"/>
+    </filter>
+  </defs>
+
+  <g clip-path="url(#al-clip)">
+    <rect x="0" y="0" width="1200" height="400" fill="url(#al-bg)"/>
+    <circle cx="120" cy="330" r="130" fill="#34d399" opacity="0.10" filter="url(#al-blur)"/>
+    <circle cx="1080" cy="80" r="140" fill="#7c3aed" opacity="0.14" filter="url(#al-blur)"/>
+
+    <text x="56" y="62" font-family="'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif" font-size="26" font-weight="700" fill="#e6ecf8">Token-level allocation</text>
+    <text x="56" y="90" font-family="'Segoe UI',system-ui,-apple-system,'Helvetica Neue',Arial,sans-serif" font-size="15" fill="#64748b">Attention importance — not position alone — decides which blocks keep their precision.</text>
+    <text x="1134" y="112" text-anchor="end" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#3f5070">attention weight</text>
+
+    <!-- attention curve -->
+    <polygon points="66,114 110,142 154,159 198,172 242,181 286,188 330,180 374,192 418,195 462,183 506,197 550,199 594,200 638,186 682,201 726,202 770,202 814,203 858,194 902,204 946,204 990,204 1034,198 1078,205 1122,206 1122,218 66,218" fill="url(#al-area)"/>
+    <polyline points="66,114 110,142 154,159 198,172 242,181 286,188 330,180 374,192 418,195 462,183 506,197 550,199 594,200 638,186 682,201 726,202 770,202 814,203 858,194 902,204 946,204 990,204 1034,198 1078,205 1122,206" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <line x1="56" y1="218" x2="1134" y2="218" stroke="#1e2b45" stroke-width="1.5"/>
+
+    <!-- decision thresholds -->
+    <line x1="187" y1="104" x2="187" y2="336" stroke="#34d399" stroke-width="1.5" stroke-dasharray="5 5" opacity="0.85"/>
+    <text x="193" y="126" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#34d399">τ_hi</text>
+    <line x1="276" y1="104" x2="276" y2="336" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5 5" opacity="0.85"/>
+    <text x="282" y="126" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#fbbf24">τ_lo</text>
+
+    <text x="56" y="262" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="11" fill="#3f5070">0</text>
+    <text x="1134" y="262" text-anchor="end" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="11" fill="#3f5070">N</text>
+
+    <!-- packed block strip: 49 tokens, 22px pitch -->
+    <rect x="56" y="270" width="130" height="44" rx="4" fill="#34d399"/>
+    <rect x="188" y="270" width="86" height="44" rx="4" fill="#fbbf24"/>
+    <rect x="276" y="270" width="64" height="44" rx="4" fill="#334155"/>
+    <rect x="342" y="270" width="20" height="44" rx="4" fill="#fbbf24"/>
+    <rect x="364" y="270" width="86" height="44" rx="4" fill="#334155"/>
+    <rect x="452" y="270" width="20" height="44" rx="4" fill="#fbbf24"/>
+    <rect x="474" y="270" width="130" height="44" rx="4" fill="#334155"/>
+    <rect x="606" y="270" width="20" height="44" rx="4" fill="#fbbf24"/>
+    <rect x="628" y="270" width="240" height="44" rx="4" fill="#334155"/>
+    <rect x="870" y="270" width="20" height="44" rx="4" fill="#fbbf24"/>
+    <rect x="892" y="270" width="130" height="44" rx="4" fill="#334155"/>
+    <rect x="1024" y="270" width="20" height="44" rx="4" fill="#fbbf24"/>
+    <rect x="1046" y="270" width="64" height="44" rx="4" fill="#334155"/>
+    <rect x="1112" y="270" width="20" height="44" rx="4" fill="#fbbf24"/>
+    <rect x="56" y="270" width="1078" height="44" rx="4" fill="none" stroke="#1e2b45" stroke-width="1"/>
+
+    <!-- legend -->
+    <rect x="56" y="352" width="12" height="12" rx="3" fill="#34d399"/>
+    <text x="75" y="362" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#8b9ab8">4-bit · attention sink</text>
+    <rect x="256" y="352" width="12" height="12" rx="3" fill="#fbbf24"/>
+    <text x="275" y="362" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#8b9ab8">3-bit · moderate</text>
+    <rect x="436" y="352" width="12" height="12" rx="3" fill="#334155"/>
+    <text x="455" y="362" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#8b9ab8">2-bit · low importance</text>
+    <text x="1134" y="362" text-anchor="end" font-family="'SFMono-Regular',Consolas,Menlo,monospace" font-size="12" fill="#3f5070">avg ≈ 2.9 bits / element</text>
+  </g>
+  <rect x="0.75" y="0.75" width="1198.5" height="398.5" rx="21" fill="none" stroke="#1d2a45" stroke-width="1.5"/>
+</svg>

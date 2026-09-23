@@ -5,7 +5,7 @@ authors:
     given-names: "Venkatesh"
     title: "AdaptiveKV Research Team"
 title: "AdaptiveKV: Dynamic Bit-Allocation for KV-Cache Compression"
-version: 0.1.0
+version: 0.1.1
 date-released: 2026-08-15
 url: "https://github.com/venkateshaddanki287-eng/adaptivekv"
 license: Apache-2.0

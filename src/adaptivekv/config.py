@@ -21,7 +21,7 @@ from adaptivekv.exceptions import (
 SUPPORTED_BIT_WIDTHS: tuple[int, ...] = (2, 3, 4)
 """Quantization bit-widths supported out of the box."""
 
-SUPPORTED_ALLOCATION_STRATEGIES: tuple[str, ...] = ("threshold", "budget")
+SUPPORTED_ALLOCATION_STRATEGIES: tuple[str, ...] = ("threshold", "budget", "random")
 """Bit-allocation strategy identifiers."""
 
 SUPPORTED_IMPORTANCE_STRATEGIES: tuple[str, ...] = (
@@ -42,6 +42,7 @@ class AllocationStrategy(str, Enum):
 
     THRESHOLD = "threshold"
     BUDGET = "budget"
+    RANDOM = "random"
 
 
 class ImportanceStrategy(str, Enum):

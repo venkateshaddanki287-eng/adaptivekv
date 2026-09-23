@@ -203,7 +203,10 @@ def run_experiment_suite(context_lengths: tuple[int, ...] = (1024, 2048, 4096, 8
                     elif isinstance(method, str) and "Fixed" in method:
                         bw = int(method.split()[1][0])
                         from adaptivekv.config import QuantizerConfig
-                        cfg = AdaptiveKVConfig(quantizer=QuantizerConfig(bit_width=bw))
+                        cfg = AdaptiveKVConfig(
+                            quantizer=QuantizerConfig(bit_width=bw),
+                            enable_adaptive_bits=False,
+                        )
                         c = AdaptiveKVCache(config=cfg)
 
                         t1_start = time.perf_counter()
@@ -254,7 +257,7 @@ def run_experiment_suite(context_lengths: tuple[int, ...] = (1024, 2048, 4096, 8
                         last_cache = c
 
                     elif method == "Random Allocation (Ablation)":
-                        cfg = AdaptiveKVConfig(allocation=AllocationConfig(strategy="threshold"))
+                        cfg = AdaptiveKVConfig(allocation=AllocationConfig(strategy="random"))
                         c = AdaptiveKVCache(config=cfg)
 
                         t1_start = time.perf_counter()
@@ -265,15 +268,6 @@ def run_experiment_suite(context_lengths: tuple[int, ...] = (1024, 2048, 4096, 8
                             do_sample=False,
                         )
                         t1_end = time.perf_counter()
-
-                        # Apply random allocation perturbation for ablation
-                        for layer in c.layers.values():
-                            if layer._raw_keys is not None:
-                                num_g = max(1, layer._raw_keys.numel() // 128)
-                                rand_allocs = random_allocator.allocate(num_g, layer._raw_keys.device)
-                                layer.compressed_keys = quantizer.quantize(layer._raw_keys, allocations=rand_allocs)
-                                layer.compressed_values = quantizer.quantize(layer._raw_values, allocations=rand_allocs)
-
                         total_time = (t1_end - t1_start) * 1000.0
                         prefill_time = total_time * 0.3
                         decode_time = total_time * 0.7
@@ -285,9 +279,12 @@ def run_experiment_suite(context_lengths: tuple[int, ...] = (1024, 2048, 4096, 8
                 tps_list.append(GEN_TOKENS / (total_time / 1000.0))
 
             # Compute Quality Metrics & Agreement
-            gen_tokens = gen_outputs[0, ctx_len:]
-            min_len = min(len(baseline_gen_tokens), len(gen_tokens))
-            token_agreement_pct = float((baseline_gen_tokens[:min_len] == gen_tokens[:min_len]).float().mean().item()) * 100.0
+            if gen_outputs is not None and len(gen_outputs) > 0:
+                gen_tokens = gen_outputs[0, ctx_len:]
+                min_len = min(len(baseline_gen_tokens), len(gen_tokens))
+                token_agreement_pct = float((baseline_gen_tokens[:min_len] == gen_tokens[:min_len]).float().mean().item()) * 100.0
+            else:
+                token_agreement_pct = 0.0
 
             # Measure KV Reconstruction Quality
             if method == "FP16 Baseline":
@@ -306,9 +303,9 @@ def run_experiment_suite(context_lengths: tuple[int, ...] = (1024, 2048, 4096, 8
 
                 if last_cache:
                     for layer in last_cache.layers.values():
-                        if layer.compressed_keys is not None and layer._raw_keys is not None:
+                        if layer.compressed_keys is not None and layer.retained_keys is not None:
                             deq_k = quantizer.dequantize(layer.compressed_keys)
-                            q_m = compute_quality_metrics(layer._raw_keys, deq_k)
+                            q_m = compute_quality_metrics(layer.retained_keys, deq_k)
                             mse_list.append(q_m.mse)
                             max_abs_list.append(q_m.max_abs_error)
                             cos_sim_list.append(q_m.cosine_similarity)

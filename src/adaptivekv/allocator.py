@@ -73,9 +73,16 @@ class AdaptiveBitAllocator:
             return self._allocate_threshold(scores, cfg)
         elif cfg.strategy == AllocationStrategy.BUDGET.value:
             return self._allocate_budget(scores, cfg)
+        elif cfg.strategy == AllocationStrategy.RANDOM.value:
+            return self._allocate_random(scores, cfg)
         else:
             raise InvalidStrategyError(
-                cfg.strategy, (AllocationStrategy.THRESHOLD.value, AllocationStrategy.BUDGET.value)
+                cfg.strategy,
+                (
+                    AllocationStrategy.THRESHOLD.value,
+                    AllocationStrategy.BUDGET.value,
+                    AllocationStrategy.RANDOM.value,
+                ),
             )
 
     def _allocate_threshold(
@@ -156,6 +163,25 @@ class AdaptiveBitAllocator:
 
         return AllocationResult(
             allocations=current_bits,
+            average_bits=avg_bits,
+            estimated_compression_ratio=comp_ratio,
+            strategy=config.strategy,
+        )
+
+    def _allocate_random(
+        self, scores: torch.Tensor, config: AllocationConfig
+    ) -> AllocationResult:
+        """Random bit allocation strategy across available bit levels."""
+        bits_tensor = torch.tensor(config.bits, dtype=torch.int64, device=scores.device)
+        num_groups = scores.numel()
+        indices = torch.randint(0, len(config.bits), (num_groups,), device=scores.device)
+        allocations = bits_tensor[indices]
+
+        avg_bits = float(torch.mean(allocations.to(torch.float32)).item())
+        comp_ratio = 16.0 / max(avg_bits, 1e-4)
+
+        return AllocationResult(
+            allocations=allocations,
             average_bits=avg_bits,
             estimated_compression_ratio=comp_ratio,
             strategy=config.strategy,

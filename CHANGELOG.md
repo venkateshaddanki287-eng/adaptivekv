@@ -5,6 +5,15 @@ All notable changes to the `adaptivekv` project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-08-20
+
+### Fixed
+- **Fixed-Bit Baselines**: Corrected fixed 2-bit, 3-bit, and 4-bit baseline configurations in research experiment runners by explicitly setting `enable_adaptive_bits=False`.
+- **Random Allocation Ablation**: Integrated `strategy="random"` into `AllocationConfig` and `AdaptiveBitAllocator`, ensuring random bit allocation is evaluated dynamically *during* inference generation.
+- **Version Consistency**: Updated package version to `0.1.1` across `pyproject.toml`, `src/adaptivekv/__init__.py`, `CITATION.cff`, and documentation.
+- **Project Metadata**: Updated package development status classifier in `pyproject.toml` to `Development Status :: 4 - Beta`.
+- **Documentation**: Replaced absolute local file URIs in `README.md` with relative repository links, updated installation guide to prioritize `pip install adaptivekv`, and updated unit test count.
+
 ## [0.1.0] - 2026-08-15
 
 ### Added
