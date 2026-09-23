@@ -659,7 +659,7 @@ Raw records live in [`research/results/`](research/results); assertions in
 ```bibtex
 @software{adaptivekv2026,
   title     = {AdaptiveKV: Dynamic Bit-Allocation for KV-Cache Compression},
-  author    = {Addanki, Venkatesh and the AdaptiveKV Research Team},
+  author    = {Addanki, Venkatesh},
   version   = {0.1.1},
   year      = {2026},
   url       = {https://github.com/venkateshaddanki287-eng/adaptivekv},

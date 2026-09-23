@@ -3,7 +3,6 @@ message: "If you use AdaptiveKV in your research or software, please cite it as 
 authors:
   - family-names: "Addanki"
     given-names: "Venkatesh"
-    title: "AdaptiveKV Research Team"
 title: "AdaptiveKV: Dynamic Bit-Allocation for KV-Cache Compression"
 version: 0.1.1
 date-released: 2026-08-15
